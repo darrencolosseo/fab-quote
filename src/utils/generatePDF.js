@@ -69,8 +69,6 @@ export function generateQuotePDF(job) {
   doc.setFont('helvetica', 'normal')
   if (job.address) { doc.text(job.address, margin, y); y += 5 }
   if (job.suburb)  { doc.text(job.suburb, margin, y);  y += 5 }
-  if (job.customer_phone) { doc.text(`Ph: ${job.customer_phone}`, margin, y); y += 5 }
-  if (job.customer_email) { doc.text(job.customer_email, margin, y); y += 5 }
 
   // Divider
   y += 3
