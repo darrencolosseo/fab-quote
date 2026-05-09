@@ -107,30 +107,51 @@ export const WALL_DEFAULTS = {
 //   boards = CEIL(width / boardWidth)
 //   cut optimised if height < 2900mm (can cut one board to get 2 heights)
 export function calcBoards(widthMm, heightMm, boardWidthMm = BOARD_WIDTH_MM, horizontal = false) {
-  const w  = parseFloat(widthMm)    || 0
-  const h  = parseFloat(heightMm)   || 0
+  const w  = parseFloat(widthMm)      || 0
+  const h  = parseFloat(heightMm)     || 0
   const bw = parseFloat(boardWidthMm) || BOARD_WIDTH_MM
-  const primary = horizontal ? h : w    // dimension boards stack against
-  const secondary = horizontal ? w : h  // dimension checked for cut optimisation
+  const primary   = horizontal ? h : w
+  const secondary = horizontal ? w : h
   if (primary <= 0 || bw <= 0) return 0
   const raw = Math.ceil(primary / bw)
   return (secondary > 0 && secondary < HEIGHT_CUT_THRESHOLD) ? Math.ceil(raw / 2) : raw
 }
 
-function round2(n) { return Math.round(n * 100) / 100 }
+// ─── Integer-cent arithmetic ──────────────────────────────────────────────────
+// All dollar values are converted to integer cents at input so every addition
+// and multiplication is exact integer arithmetic.
+// The ONLY place Math.round is used is when computing the margin (integer × %).
+// Output values are converted back to dollars (÷ 100) for storage/display.
+function cents(val, fallback = 0) {
+  const n = parseFloat(val)
+  return Number.isFinite(n) ? Math.round(n * 100) : Math.round(fallback * 100)
+}
+function dollars(c) { return c / 100 }
+function applyMargin(subtotalCents, mPct) {
+  const marginCents = Math.round(subtotalCents * mPct)  // single rounding point
+  return { marginCents, totalCents: subtotalCents + marginCents }
+}
 
 // ─── Garage door section ──────────────────────────────────────────────────────
 export function calcGarage({ widthMm, heightMm, boardWidthMm, boardCostPerUnit, framePkgCost, horizontal, marginPct: mPctOverride }) {
-  const bw      = parseFloat(boardWidthMm)    || BOARD_WIDTH_MM
-  const bCost   = parseFloat(boardCostPerUnit) || BOARD_COST
-  const fCost   = parseFloat(framePkgCost)     || 0
-  const boards  = calcBoards(widthMm, heightMm, bw, horizontal || false)
-  const claddingCost = round2(boards * bCost)
-  const subtotal     = round2(fCost + claddingCost)
+  const bw          = parseFloat(boardWidthMm) || BOARD_WIDTH_MM
+  const boards      = calcBoards(widthMm, heightMm, bw, horizontal || false)
+  const bCostCents  = cents(boardCostPerUnit, BOARD_COST)
+  const fCostCents  = cents(framePkgCost)
+  const claddingCents = boards * bCostCents          // integer × integer = exact
+  const subtotalCents = fCostCents + claddingCents   // integer + integer = exact
   const mPct = mPctOverride != null ? mPctOverride : MARGIN_PCT
-  const margin       = round2(subtotal * mPct)
-  const total        = round2(subtotal + margin)
-  return { boards, boardWidthMm: bw, boardCostPerUnit: bCost, framePkgCost: fCost, claddingCost, subtotal, margin, total }
+  const { marginCents, totalCents } = applyMargin(subtotalCents, mPct)
+  return {
+    boards,
+    boardWidthMm:    bw,
+    boardCostPerUnit: dollars(bCostCents),
+    framePkgCost:    dollars(fCostCents),
+    claddingCost:    dollars(claddingCents),
+    subtotal:        dollars(subtotalCents),
+    margin:          dollars(marginCents),
+    total:           dollars(totalCents),
+  }
 }
 
 // ─── Front door (Type 1 — Timber) ────────────────────────────────────────────
@@ -141,21 +162,38 @@ export function calcFrontDoorTimber({
   widthMm, heightMm, boardWidthMm, boardCostPerUnit, horizontal,
   marginPct: mPctOverride,
 }) {
-  const bw = parseFloat(boardWidthMm) || BOARD_WIDTH_MM
+  const bw     = parseFloat(boardWidthMm) || BOARD_WIDTH_MM
   const boards = calcBoards(widthMm, heightMm, bw, horizontal || false)
-  const claddingCost = round2(boards * (parseFloat(boardCostPerUnit) || BOARD_COST))
-  const doorCost  = round2(parseFloat(timberDoorPrice) || 0)
-  const jambCost  = round2((parseFloat(jambCount) || 1) * (parseFloat(jambCostEach) || 316) + (parseFloat(extraJambCost) || 0))
-  const pivot     = parseFloat(pivotCost) || 150
-  const deliv     = parseFloat(delivery)  || 155
-  const sheetCost = round2((parseFloat(alumSheets) || 0) * (parseFloat(alumSheetCostEach) || 150))
-  const install   = parseFloat(labourInstall) || 1300
-  const clad      = parseFloat(labourClad)    || 1300
-  const subtotal  = round2(doorCost + jambCost + pivot + deliv + sheetCost + claddingCost + install + clad)
-  const mPct  = mPctOverride != null ? mPctOverride : MARGIN_PCT
-  const margin    = round2(subtotal * mPct)
-  const total     = round2(subtotal + margin)
-  return { boards, claddingCost, doorCost, jambCost, pivot, deliv, sheetCost, install, clad, subtotal, margin, total }
+
+  const bCostCents    = cents(boardCostPerUnit, BOARD_COST)
+  const doorCostCents = cents(timberDoorPrice)
+  const jambCostCents = Math.round(cents(jambCount, 1) / 100) * cents(jambCostEach, 316)
+                       + cents(extraJambCost)
+  const pivotCents    = cents(pivotCost,      FRONT_DOOR_DEFAULTS.pivotCost)
+  const delivCents    = cents(delivery,       FRONT_DOOR_DEFAULTS.deliveryTimber)
+  const sheetCents    = Math.round(cents(alumSheets) / 100) * cents(alumSheetCostEach, FRONT_DOOR_DEFAULTS.alumSheetCost)
+  const installCents  = cents(labourInstall,  FRONT_DOOR_DEFAULTS.labourInstall)
+  const cladCents     = cents(labourClad,     FRONT_DOOR_DEFAULTS.labourClad)
+  const claddingCents = boards * bCostCents
+
+  const subtotalCents = doorCostCents + jambCostCents + pivotCents + delivCents
+                      + sheetCents + claddingCents + installCents + cladCents
+  const mPct = mPctOverride != null ? mPctOverride : MARGIN_PCT
+  const { marginCents, totalCents } = applyMargin(subtotalCents, mPct)
+  return {
+    boards,
+    claddingCost: dollars(claddingCents),
+    doorCost:     dollars(doorCostCents),
+    jambCost:     dollars(jambCostCents),
+    pivot:        dollars(pivotCents),
+    deliv:        dollars(delivCents),
+    sheetCost:    dollars(sheetCents),
+    install:      dollars(installCents),
+    clad:         dollars(cladCents),
+    subtotal:     dollars(subtotalCents),
+    margin:       dollars(marginCents),
+    total:        dollars(totalCents),
+  }
 }
 
 // ─── Front door (Type 2 — Aluminium) ─────────────────────────────────────────
@@ -166,74 +204,127 @@ export function calcFrontDoorAluminium({
   widthMm, heightMm, boardWidthMm, boardCostPerUnit, horizontal,
   marginPct: mPctOverride,
 }) {
-  const bw = parseFloat(boardWidthMm) || BOARD_WIDTH_MM
+  const bw     = parseFloat(boardWidthMm) || BOARD_WIDTH_MM
   const boards = calcBoards(widthMm, heightMm, bw, horizontal || false)
-  const claddingCost = round2(boards * (parseFloat(boardCostPerUnit) || BOARD_COST))
-  const frame     = round2(parseFloat(alumFramePrice) || 0)
-  const jambCost  = round2((parseFloat(jambCount) || 1) * (parseFloat(jambCostEach) || 316) + (parseFloat(extraJambCost) || 0))
-  const pivot     = parseFloat(pivotCost)     || 150
-  const delivJ    = parseFloat(deliveryJambs) || 155
-  const delivD    = parseFloat(deliveryDoor)  || 250
-  const sheetCost = round2((parseFloat(alumSheets) || 0) * (parseFloat(alumSheetCostEach) || 150))
-  const install   = parseFloat(labourInstall) || 1300
-  const clad      = parseFloat(labourClad)    || 1300
-  const subtotal  = round2(frame + jambCost + pivot + delivJ + delivD + sheetCost + claddingCost + install + clad)
-  const mPct  = mPctOverride != null ? mPctOverride : MARGIN_PCT
-  const margin    = round2(subtotal * mPct)
-  const total     = round2(subtotal + margin)
-  return { boards, claddingCost, frame, jambCost, pivot, delivJ, delivD, sheetCost, install, clad, subtotal, margin, total }
+
+  const bCostCents    = cents(boardCostPerUnit, BOARD_COST)
+  const frameCents    = cents(alumFramePrice)
+  const jambCostCents = Math.round(cents(jambCount, 1) / 100) * cents(jambCostEach, 316)
+                       + cents(extraJambCost)
+  const pivotCents    = cents(pivotCost,    FRONT_DOOR_DEFAULTS.pivotCost)
+  const delivJCents   = cents(deliveryJambs, FRONT_DOOR_DEFAULTS.deliveryJambs)
+  const delivDCents   = cents(deliveryDoor,  FRONT_DOOR_DEFAULTS.deliveryAlumDoor)
+  const sheetCents    = Math.round(cents(alumSheets) / 100) * cents(alumSheetCostEach, FRONT_DOOR_DEFAULTS.alumSheetCost)
+  const installCents  = cents(labourInstall, FRONT_DOOR_DEFAULTS.labourInstall)
+  const cladCents     = cents(labourClad,    FRONT_DOOR_DEFAULTS.labourClad)
+  const claddingCents = boards * bCostCents
+
+  const subtotalCents = frameCents + jambCostCents + pivotCents + delivJCents + delivDCents
+                      + sheetCents + claddingCents + installCents + cladCents
+  const mPct = mPctOverride != null ? mPctOverride : MARGIN_PCT
+  const { marginCents, totalCents } = applyMargin(subtotalCents, mPct)
+  return {
+    boards,
+    claddingCost: dollars(claddingCents),
+    frame:        dollars(frameCents),
+    jambCost:     dollars(jambCostCents),
+    pivot:        dollars(pivotCents),
+    delivJ:       dollars(delivJCents),
+    delivD:       dollars(delivDCents),
+    sheetCost:    dollars(sheetCents),
+    install:      dollars(installCents),
+    clad:         dollars(cladCents),
+    subtotal:     dollars(subtotalCents),
+    margin:       dollars(marginCents),
+    total:        dollars(totalCents),
+  }
 }
 
 // ─── Wall cladding — multiple walls ──────────────────────────────────────────
 export function calcWallMulti({ walls, boardWidthMm, boardCostPerUnit, horizontal, includeTopHats, labourCost, curvingCost, marginPct: mPctOverride }) {
-  const bw    = parseFloat(boardWidthMm)    || BOARD_WIDTH_MM
-  const bCost = parseFloat(boardCostPerUnit) || BOARD_COST
+  const bw         = parseFloat(boardWidthMm) || BOARD_WIDTH_MM
+  const bCostCents = cents(boardCostPerUnit, BOARD_COST)
+
   const wallDetails = (walls || []).map((w) => {
     const boards = calcBoards(w.widthMm, w.heightMm, bw, horizontal || false)
     return { ...w, boards }
   })
-  const totalBoards = wallDetails.reduce((s, w) => s + w.boards, 0)
-  const claddingCost = round2(totalBoards * bCost)
-  const topHatsCost  = includeTopHats ? WALL_DEFAULTS.topHatCount * WALL_DEFAULTS.topHatCostEach : 0
-  const trimsCost    = WALL_DEFAULTS.trimsCost
-  const labour       = parseFloat(labourCost)  || 0
-  const curving      = parseFloat(curvingCost) || 0
-  const subtotal     = round2(claddingCost + topHatsCost + trimsCost + labour + curving)
-  const mPct  = mPctOverride != null ? mPctOverride : MARGIN_PCT
-  const margin       = round2(subtotal * mPct)
-  const total        = round2(subtotal + margin)
-  return { wallDetails, totalBoards, claddingCost, topHatsCost, trimsCost, labourCost: labour, curvingCost: curving, subtotal, margin, total }
+  const totalBoards   = wallDetails.reduce((s, w) => s + w.boards, 0)
+  const claddingCents = totalBoards * bCostCents   // integer × integer = exact
+  const topHatsCents  = includeTopHats
+    ? WALL_DEFAULTS.topHatCount * Math.round(WALL_DEFAULTS.topHatCostEach * 100) : 0
+  const trimsCents    = Math.round(WALL_DEFAULTS.trimsCost * 100)
+  const labourCents   = cents(labourCost)
+  const curvingCents  = cents(curvingCost)
+
+  const subtotalCents = claddingCents + topHatsCents + trimsCents + labourCents + curvingCents
+  const mPct = mPctOverride != null ? mPctOverride : MARGIN_PCT
+  const { marginCents, totalCents } = applyMargin(subtotalCents, mPct)
+  return {
+    wallDetails,
+    totalBoards,
+    claddingCost: dollars(claddingCents),
+    topHatsCost:  dollars(topHatsCents),
+    trimsCost:    dollars(trimsCents),
+    labourCost:   dollars(labourCents),
+    curvingCost:  dollars(curvingCents),
+    subtotal:     dollars(subtotalCents),
+    margin:       dollars(marginCents),
+    total:        dollars(totalCents),
+  }
 }
 
 // ─── Legacy single-wall calc (used for old v2 saved quotes) ──────────────────
 export function calcWall({ widthMm, heightMm, boardWidthMm, boardCostPerUnit, includeTopHats, labourCost }) {
-  const bw      = parseFloat(boardWidthMm)    || BOARD_WIDTH_MM
-  const bCost   = parseFloat(boardCostPerUnit) || BOARD_COST
-  const boards  = calcBoards(widthMm, heightMm, bw)
-  const claddingCost = round2(boards * bCost)
-  const topHatsCost  = includeTopHats ? WALL_DEFAULTS.topHatCount * WALL_DEFAULTS.topHatCostEach : 0
-  const trimsCost    = WALL_DEFAULTS.trimsCost
-  const labour       = parseFloat(labourCost) || 0
-  const subtotal     = round2(claddingCost + topHatsCost + trimsCost + labour)
-  const margin       = round2(subtotal * MARGIN_PCT)
-  const total        = round2(subtotal + margin)
-  return { boards, boardWidthMm: bw, boardCostPerUnit: bCost, claddingCost, topHatsCost, trimsCost, labourCost: labour, subtotal, margin, total }
+  const bw         = parseFloat(boardWidthMm) || BOARD_WIDTH_MM
+  const bCostCents = cents(boardCostPerUnit, BOARD_COST)
+  const boards     = calcBoards(widthMm, heightMm, bw)
+  const claddingCents = boards * bCostCents
+  const topHatsCents  = includeTopHats ? WALL_DEFAULTS.topHatCount * Math.round(WALL_DEFAULTS.topHatCostEach * 100) : 0
+  const trimsCents    = Math.round(WALL_DEFAULTS.trimsCost * 100)
+  const labourCents   = cents(labourCost)
+  const subtotalCents = claddingCents + topHatsCents + trimsCents + labourCents
+  const { marginCents, totalCents } = applyMargin(subtotalCents, MARGIN_PCT)
+  return {
+    boards,
+    boardWidthMm: bw,
+    boardCostPerUnit: dollars(bCostCents),
+    claddingCost: dollars(claddingCents),
+    topHatsCost:  dollars(topHatsCents),
+    trimsCost:    dollars(trimsCents),
+    labourCost:   dollars(labourCents),
+    subtotal:     dollars(subtotalCents),
+    margin:       dollars(marginCents),
+    total:        dollars(totalCents),
+  }
 }
 
 // ─── Legacy front door calc (used for old v2 saved quotes) ───────────────────
 export function calcFrontDoor({ widthMm, heightMm, boardWidthMm, boardCostPerUnit, supplyDoor, includeLabour }) {
-  const bw      = parseFloat(boardWidthMm)    || BOARD_WIDTH_MM
-  const bCost   = parseFloat(boardCostPerUnit) || BOARD_COST
-  const d       = FRONT_DOOR_DEFAULTS
-  const boards  = calcBoards(widthMm, heightMm, bw)
-  const claddingCost   = round2(boards * bCost)
-  const trimsCost      = 100
-  const doorComponents = supplyDoor ? 380 + d.jambCostPerLength + d.pivotCost + 139 : 0
-  const labourCost     = includeLabour ? (supplyDoor ? d.labourInstall : 0) + d.labourClad : 0
-  const subtotal = round2(claddingCost + trimsCost + doorComponents + labourCost)
-  const margin   = round2(subtotal * MARGIN_PCT)
-  const total    = round2(subtotal + margin)
-  return { boards, boardWidthMm: bw, boardCostPerUnit: bCost, claddingCost, trimsCost, doorComponents, labourCost, subtotal, margin, total }
+  const bw         = parseFloat(boardWidthMm) || BOARD_WIDTH_MM
+  const bCostCents = cents(boardCostPerUnit, BOARD_COST)
+  const d          = FRONT_DOOR_DEFAULTS
+  const boards     = calcBoards(widthMm, heightMm, bw)
+  const claddingCents   = boards * bCostCents
+  const trimsCents      = 10000  // $100.00
+  const doorCompCents   = supplyDoor
+    ? Math.round((380 + d.jambCostPerLength + d.pivotCost + 139) * 100) : 0
+  const labourCents     = includeLabour
+    ? Math.round(((supplyDoor ? d.labourInstall : 0) + d.labourClad) * 100) : 0
+  const subtotalCents   = claddingCents + trimsCents + doorCompCents + labourCents
+  const { marginCents, totalCents } = applyMargin(subtotalCents, MARGIN_PCT)
+  return {
+    boards,
+    boardWidthMm: bw,
+    boardCostPerUnit: dollars(bCostCents),
+    claddingCost:   dollars(claddingCents),
+    trimsCost:      dollars(trimsCents),
+    doorComponents: dollars(doorCompCents),
+    labourCost:     dollars(labourCents),
+    subtotal:       dollars(subtotalCents),
+    margin:         dollars(marginCents),
+    total:          dollars(totalCents),
+  }
 }
 
 // ─── Build full quote summary text ───────────────────────────────────────────
