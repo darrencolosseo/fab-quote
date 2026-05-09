@@ -156,7 +156,7 @@ export default function JobDetail() {
   return (
     <div className="min-h-screen" style={{ backgroundColor: '#1a1f2e' }}>
       {/* Header */}
-      <header className="sticky top-0 z-50" style={{ backgroundColor: '#1a1f2e', borderBottom: '1px solid #2d3448' }}>
+      <header className="sticky top-0 z-50" style={{ backgroundColor: 'rgba(20,24,32,0.92)', borderBottom: '1px solid rgba(255,255,255,0.06)', backdropFilter: 'blur(12px)' }}>
         <div className="max-w-2xl mx-auto px-4 py-3 flex items-center gap-3">
           <button onClick={() => navigate('/')}
             className="flex items-center justify-center w-9 h-9 rounded-lg text-slate-400 hover:text-white hover:bg-white/10 transition-colors">
@@ -341,22 +341,22 @@ export default function JobDetail() {
 
       {/* Sticky action bar */}
       <div className="fixed bottom-0 left-0 right-0 z-40 px-4 py-4"
-        style={{ backgroundColor: '#1a1f2e', borderTop: '1px solid #2d3448' }}>
+        style={{ backgroundColor: 'rgba(20,24,32,0.95)', borderTop: '1px solid rgba(255,255,255,0.06)', backdropFilter: 'blur(16px)' }}>
         <div className="max-w-2xl mx-auto flex gap-2">
           <button onClick={() => setShowSummary(true)}
-            className="flex-1 py-3 rounded-xl text-sm font-semibold transition-colors"
-            style={{ backgroundColor: '#2d3448', color: '#cbd5e1' }}>
+            className="flex-1 py-3 rounded-xl text-sm font-semibold transition-all"
+            style={{ backgroundColor: 'rgba(255,255,255,0.06)', color: '#cbd5e1', border: '1px solid rgba(255,255,255,0.08)' }}>
             Copy Summary
           </button>
           <button onClick={() => downloadQuotePDF(job)}
-            className="flex-1 py-3 rounded-xl text-sm font-semibold transition-colors"
-            style={{ backgroundColor: '#2d3448', color: '#cbd5e1' }}>
+            className="flex-1 py-3 rounded-xl text-sm font-semibold transition-all"
+            style={{ backgroundColor: 'rgba(255,255,255,0.06)', color: '#cbd5e1', border: '1px solid rgba(255,255,255,0.08)' }}>
             ↓ PDF
           </button>
           <button onClick={() => navigate(`/job/${id}/edit`)}
-            className="flex-1 py-3 rounded-xl text-sm font-semibold transition-colors"
-            style={{ backgroundColor: '#f97316', color: 'white' }}>
-            Edit Quote
+            className="flex-1 py-3 rounded-xl text-sm font-bold transition-all"
+            style={{ background: 'linear-gradient(135deg, #f97316, #ea6b0f)', color: 'white', boxShadow: '0 2px 12px rgba(249,115,22,0.35)' }}>
+            Edit ✏
           </button>
         </div>
       </div>

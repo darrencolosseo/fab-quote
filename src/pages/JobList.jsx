@@ -111,7 +111,7 @@ export default function JobList() {
     const q = search.toLowerCase()
     if (!q) return true
     return (
-      (j.customer_name || '').toLowerCase().includes(q) ||
+      (j.address || '').toLowerCase().includes(q) ||
       (j.suburb || '').toLowerCase().includes(q) ||
       (j.quote_number || '').toLowerCase().includes(q)
     )
@@ -138,7 +138,7 @@ export default function JobList() {
   return (
     <div className="min-h-screen" style={{ backgroundColor: '#1a1f2e' }}>
       {/* Header */}
-      <header className="sticky top-0 z-50" style={{ backgroundColor: '#1a1f2e', borderBottom: '1px solid #2d3448' }}>
+      <header className="sticky top-0 z-50" style={{ backgroundColor: 'rgba(20,24,32,0.92)', borderBottom: '1px solid rgba(255,255,255,0.06)', backdropFilter: 'blur(12px)' }}>
         <div className="max-w-2xl mx-auto px-4 py-3 flex items-center gap-3">
           <div className="w-8 h-8 rounded-lg flex items-center justify-center font-bold text-sm flex-shrink-0" style={{ backgroundColor: '#f97316', color: 'white' }}>
             FG
@@ -211,7 +211,7 @@ export default function JobList() {
           </svg>
           <input
             type="text"
-            placeholder="Search by name, suburb or quote number…"
+            placeholder="Search by address, suburb or quote number…"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="w-full pl-9 pr-4 py-2.5 rounded-xl text-sm text-white placeholder-slate-500 outline-none"
@@ -309,7 +309,7 @@ export default function JobList() {
                       {/* Top row */}
                       <div className="flex items-start justify-between gap-2 mb-1.5">
                         <div className="flex-1 min-w-0">
-                          <div className="font-semibold text-white text-sm truncate">{job.customer_name || 'Unnamed Customer'}</div>
+                          <div className="font-semibold text-white text-sm truncate">{job.address || 'No address'}</div>
                           <div className="text-xs text-slate-400 mt-0.5">{job.suburb || '—'}</div>
                         </div>
                         <div className="flex items-center gap-2">
