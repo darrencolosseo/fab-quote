@@ -264,15 +264,6 @@ export function generateQuotePDF(job) {
     y += noteLines.length * 4.5 + 4
   }
 
-  // ── Footer ────────────────────────────────────────────────────────────────────
-  const footerY = 277
-  doc.setFillColor(...lightGrey)
-  doc.rect(0, footerY - 2, pageW, 20, 'F')
-  doc.setTextColor(...midGrey)
-  doc.setFontSize(7.5)
-  doc.setFont('helvetica', 'normal')
-  doc.text('Quote valid for 30 days.  Payment: 50% deposit on acceptance, balance on completion.', pageW / 2, footerY + 7, { align: 'center' })
-
   return doc
 }
 
