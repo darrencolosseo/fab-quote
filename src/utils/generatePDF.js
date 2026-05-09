@@ -18,8 +18,10 @@ export function generateQuotePDF(job) {
   const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
 
   const pageW  = 210
+  const pageH  = 297
   const margin = 18
   const cW     = pageW - margin * 2
+  const bottomLimit = pageH - 14   // ~14mm bottom safety margin
 
   const navy      = [26,  31,  46 ]
   const orange    = [249, 115, 22 ]
@@ -29,6 +31,15 @@ export function generateQuotePDF(job) {
   const midGrey   = [100, 116, 139]
   const dark      = [30,  41,  59 ]
   const divider   = [203, 213, 225]
+
+  // ── Page-break helper ────────────────────────────────────────────────────────
+  // Call before drawing a block; if it won't fit, start a fresh page.
+  function ensureSpace(neededMm) {
+    if (y + neededMm > bottomLimit) {
+      doc.addPage()
+      y = 18
+    }
+  }
 
   // ── Header ───────────────────────────────────────────────────────────────────
   doc.setFillColor(...navy)
@@ -81,6 +92,15 @@ export function generateQuotePDF(job) {
   // ── Helper: draw a full section ───────────────────────────────────────────────
   // rows: array of { label, value } | { label, value, bold } | 'divider' | 'subtotal-divider'
   function drawSection(title, subtitle, bulletLines, costRows, sectionTotal) {
+    // Estimate: header (11) + bullets (~5×count + 7) + divider (5) + rows (~5×count) + total bar (15)
+    const estHeight = 11
+      + (bulletLines.length > 0 ? bulletLines.length * 4.5 + 7 : 0)
+      + 5
+      + costRows.length * 5.5
+      + 16
+    // Keep header + first few rows together — at minimum need ~40mm to start cleanly
+    ensureSpace(Math.min(estHeight, 60))
+
     // Section header bar
     doc.setFillColor(...lightGrey)
     doc.rect(margin, y - 3, cW, 9, 'F')
@@ -98,12 +118,14 @@ export function generateQuotePDF(job) {
 
     // Bullet list (what's included)
     if (bulletLines.length > 0) {
+      ensureSpace(7 + bulletLines.length * 4.5)
       doc.setFontSize(8.5)
       doc.setFont('helvetica', 'normal')
       doc.setTextColor(...midGrey)
       doc.text('Includes:', margin + 3, y)
       y += 5
       bulletLines.forEach((b) => {
+        ensureSpace(5)
         doc.setTextColor(...dark)
         doc.text('  ' + b, margin + 3, y)
         y += 4.5
@@ -112,6 +134,7 @@ export function generateQuotePDF(job) {
     }
 
     // Cost breakdown divider
+    ensureSpace(5)
     doc.setDrawColor(...divider)
     doc.setLineWidth(0.2)
     doc.line(margin, y, pageW - margin, y)
@@ -120,6 +143,7 @@ export function generateQuotePDF(job) {
     // Cost rows
     costRows.forEach((row) => {
       if (row === 'divider') {
+        ensureSpace(3)
         doc.setDrawColor(...divider)
         doc.setLineWidth(0.15)
         doc.line(margin + cW * 0.45, y - 1, pageW - margin, y - 1)
@@ -130,6 +154,7 @@ export function generateQuotePDF(job) {
       const isSubtotal  = row.subtotal || false
       const isMargin    = row.margin || false
 
+      ensureSpace(isSubtotal ? 7 : 6)
       doc.setFontSize(isBold || isSubtotal ? 9.5 : 9)
       doc.setFont('helvetica', isBold || isSubtotal ? 'bold' : 'normal')
       doc.setTextColor(isMargin ? midGrey[0] : dark[0], isMargin ? midGrey[1] : dark[1], isMargin ? midGrey[2] : dark[2])
@@ -141,7 +166,8 @@ export function generateQuotePDF(job) {
 
     y += 1
 
-    // Section total bar (navy)
+    // Section total bar (navy) — keep on same page as preceding rows
+    ensureSpace(15)
     doc.setFillColor(...navy)
     doc.rect(margin, y, cW, 10, 'F')
     doc.setTextColor(...white)
@@ -302,6 +328,11 @@ export function generateQuotePDF(job) {
   // ── Summary + Grand Total ─────────────────────────────────────────────────────
   y += 2
 
+  // Reserve space for summary (if shown) + grand total — keep them together
+  const summaryHeight = sectionSummary.length > 1 ? (6 + sectionSummary.length * 6 + 6) : 0
+  const grandTotalHeight = 19
+  ensureSpace(summaryHeight + grandTotalHeight)
+
   // If multiple sections, show a summary table first
   if (sectionSummary.length > 1) {
     doc.setFillColor(...softGrey)
@@ -335,6 +366,8 @@ export function generateQuotePDF(job) {
 
   // ── Notes ─────────────────────────────────────────────────────────────────────
   if (userNotes) {
+    const noteLines = doc.splitTextToSize(userNotes, cW)
+    ensureSpace(8 + noteLines.length * 4)
     y += 3
     doc.setTextColor(...midGrey)
     doc.setFontSize(7.5)
@@ -344,7 +377,6 @@ export function generateQuotePDF(job) {
     doc.setTextColor(...dark)
     doc.setFontSize(8.5)
     doc.setFont('helvetica', 'normal')
-    const noteLines = doc.splitTextToSize(userNotes, cW)
     doc.text(noteLines, margin, y)
   }
 
