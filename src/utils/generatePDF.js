@@ -90,16 +90,18 @@ export function generateQuotePDF(job) {
   const marginLabel = `${Math.round(marginPct * 100)}%`
 
   // ── Helper: draw a full section ───────────────────────────────────────────────
-  // rows: array of { label, value } | { label, value, bold } | 'divider' | 'subtotal-divider'
+  // Each section is kept on a single page. If it won't fit on the current page,
+  // a new page is started BEFORE drawing anything. This guarantees the section
+  // total bar always appears immediately under its line items.
   function drawSection(title, subtitle, bulletLines, costRows, sectionTotal) {
-    // Estimate: header (11) + bullets (~5×count + 7) + divider (5) + rows (~5×count) + total bar (15)
-    const estHeight = 11
-      + (bulletLines.length > 0 ? bulletLines.length * 4.5 + 7 : 0)
-      + 5
-      + costRows.length * 5.5
-      + 16
-    // Keep header + first few rows together — at minimum need ~40mm to start cleanly
-    ensureSpace(Math.min(estHeight, 60))
+    // Compute exact section height (matches the y-increments below).
+    const bulletsHeight = bulletLines.length > 0 ? 5 + bulletLines.length * 4.5 + 2 : 0
+    let rowsHeight = 0
+    costRows.forEach((row) => { rowsHeight += row === 'divider' ? 2 : (row.subtotal ? 6 : 5) })
+    const sectionHeight = 11 + bulletsHeight + 5 + rowsHeight + 1 + 15
+
+    // If this section won't fit on the current page, start a new page first.
+    ensureSpace(sectionHeight)
 
     // Section header bar
     doc.setFillColor(...lightGrey)
@@ -118,14 +120,12 @@ export function generateQuotePDF(job) {
 
     // Bullet list (what's included)
     if (bulletLines.length > 0) {
-      ensureSpace(7 + bulletLines.length * 4.5)
       doc.setFontSize(8.5)
       doc.setFont('helvetica', 'normal')
       doc.setTextColor(...midGrey)
       doc.text('Includes:', margin + 3, y)
       y += 5
       bulletLines.forEach((b) => {
-        ensureSpace(5)
         doc.setTextColor(...dark)
         doc.text('  ' + b, margin + 3, y)
         y += 4.5
@@ -134,7 +134,6 @@ export function generateQuotePDF(job) {
     }
 
     // Cost breakdown divider
-    ensureSpace(5)
     doc.setDrawColor(...divider)
     doc.setLineWidth(0.2)
     doc.line(margin, y, pageW - margin, y)
@@ -143,7 +142,6 @@ export function generateQuotePDF(job) {
     // Cost rows
     costRows.forEach((row) => {
       if (row === 'divider') {
-        ensureSpace(3)
         doc.setDrawColor(...divider)
         doc.setLineWidth(0.15)
         doc.line(margin + cW * 0.45, y - 1, pageW - margin, y - 1)
@@ -154,7 +152,6 @@ export function generateQuotePDF(job) {
       const isSubtotal  = row.subtotal || false
       const isMargin    = row.margin || false
 
-      ensureSpace(isSubtotal ? 7 : 6)
       doc.setFontSize(isBold || isSubtotal ? 9.5 : 9)
       doc.setFont('helvetica', isBold || isSubtotal ? 'bold' : 'normal')
       doc.setTextColor(isMargin ? midGrey[0] : dark[0], isMargin ? midGrey[1] : dark[1], isMargin ? midGrey[2] : dark[2])
@@ -166,8 +163,7 @@ export function generateQuotePDF(job) {
 
     y += 1
 
-    // Section total bar (navy) — keep on same page as preceding rows
-    ensureSpace(15)
+    // Section total bar (navy) — guaranteed on the same page by the upfront ensureSpace.
     doc.setFillColor(...navy)
     doc.rect(margin, y, cW, 10, 'F')
     doc.setTextColor(...white)
