@@ -158,25 +158,29 @@ export function generateQuotePDF(job) {
   const sectionSummary = []
 
   // ── Garage section ────────────────────────────────────────────────────────────
-  const garageTitle    = `Garage Door — ${job.door_type || ''}`
-  const garageSubtitle = job.width_mm ? `${job.width_mm}mm × ${job.height_mm}mm` : ''
-  const garageBullets  = [
-    'Doorman Motor',
-    '2 Remotes and 1 × wall button',
-    'Custom aluminium frame',
-    'Tracks and springs to suit',
-  ]
-  if (g?.boards > 0) garageBullets.push(`Cladding: ${g.boards} boards (${g.claddingType || job.frame_size || ''}, ${g.boardWidthMm || 150}mm)`)
+  // Only render if it has meaningful data — supports "front door only" quotes.
+  const hasGarage = (g?.total > 0) || (g?.framePkgCost > 0) || (g?.boards > 0) || (job.frame_cost > 0)
+  if (hasGarage) {
+    const garageTitle    = `Garage Door — ${job.door_type || ''}`
+    const garageSubtitle = job.width_mm ? `${job.width_mm}mm × ${job.height_mm}mm` : ''
+    const garageBullets  = [
+      'Doorman Motor',
+      '2 Remotes and 1 × wall button',
+      'Custom aluminium frame',
+      'Tracks and springs to suit',
+    ]
+    if (g?.boards > 0) garageBullets.push(`Cladding: ${g.boards} boards (${g.claddingType || job.frame_size || ''}, ${g.boardWidthMm || 150}mm)`)
 
-  const garageCosts = []
-  if (g?.framePkgCost > 0) garageCosts.push({ label: 'Frame / Motor Package', value: fmt(g.framePkgCost) })
-  if (g?.claddingCost > 0) garageCosts.push({ label: `Cladding  ${g.boards} boards × $${g.boardCostPerUnit}`, value: fmt(g.claddingCost) })
-  garageCosts.push('divider')
-  garageCosts.push({ label: 'Subtotal', value: fmt(g?.subtotal), subtotal: true })
-  garageCosts.push({ label: `Margin (${marginLabel})`, value: fmt(g?.margin), margin: true })
+    const garageCosts = []
+    if (g?.framePkgCost > 0) garageCosts.push({ label: 'Frame / Motor Package', value: fmt(g.framePkgCost) })
+    if (g?.claddingCost > 0) garageCosts.push({ label: `Cladding  ${g.boards} boards × $${g.boardCostPerUnit}`, value: fmt(g.claddingCost) })
+    garageCosts.push('divider')
+    garageCosts.push({ label: 'Subtotal', value: fmt(g?.subtotal), subtotal: true })
+    garageCosts.push({ label: `Margin (${marginLabel})`, value: fmt(g?.margin), margin: true })
 
-  drawSection(garageTitle, garageSubtitle, garageBullets, garageCosts, fmt(g?.total))
-  sectionSummary.push({ label: `Garage Door${garageSubtitle ? `  (${garageSubtitle})` : ''}`, value: fmt(g?.total) })
+    drawSection(garageTitle, garageSubtitle, garageBullets, garageCosts, fmt(g?.total))
+    sectionSummary.push({ label: `Garage Door${garageSubtitle ? `  (${garageSubtitle})` : ''}`, value: fmt(g?.total) })
+  }
 
   // ── Front Door — v3 ───────────────────────────────────────────────────────────
   if (fd && isV3) {
